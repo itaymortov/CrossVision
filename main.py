@@ -13,8 +13,8 @@ class ObjectDetection:
         polygon = np.array([
             [0, 0],
             [frame_width, 0],
-            [frame_width, int(frame_height * 0.5)],
-            [0, int(frame_height * 0.5)]
+            [frame_width, int(frame_height * 0.4)],
+            [0, int(frame_height * 0.4)]
         ])
         xyxys = []
         confidences = []
