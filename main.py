@@ -68,25 +68,28 @@ class ObjectDetection:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print("Using Device: ", self.device)
 
-        self.model = self.load_model()
+        self.model, self.model2 = self.load_models()
 
         self.CLASS_NAMES_DICT = self.model.model.names
 
-        self.box_annotator = sv.BoxAnnotator(sv.ColorPalette.default(), thickness=3, text_thickness=3, text_scale=1.5)
+        self.box_annotator = sv.BoxAnnotator(sv.ColorPalette.default(), thickness=2, text_thickness=2, text_scale=1.1)
 
-    def load_model(self):
+    def load_models(self):
 
-        model = YOLO("yolov8s.pt")  # load a pretrained YOLOv8n model
+        model = YOLO("yolov8s.pt")  # load a pretrained YOLOv8s model
+        model2 = YOLO("best.pt")  # load our self trained model.
         model.fuse()
+        model2.fuse()
 
-        return model
+        return model, model2
 
     def predict(self, frame):
 
         results = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
-        return results
+        results2 = self.model2(frame, save=False, device=0, show=False,  classes=[1],conf=0.4)
+        return results, results2
 
-    def plot_bboxes(self, results, frame):
+    def plot_bboxes(self, results, results2, frame):
 
         xyxys = []
         confidences = []
@@ -94,14 +97,16 @@ class ObjectDetection:
 
         # Extract detections for Traffic light class
         for result in results:
-            boxes = result.boxes.cpu().numpy()
-            class_id = boxes.cls
-            conf = boxes.conf
-            xyxy = boxes.xyxy
-
             xyxys.append(result.boxes.xyxy.cpu().numpy())
             confidences.append(result.boxes.conf.cpu().numpy())
             class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
+
+        for result2 in results2:
+            boxes = result.boxes.cpu().numpy()
+
+            xyxys.append(result2.boxes.xyxy.cpu().numpy())
+            confidences.append(result2.boxes.conf.cpu().numpy())
+            class_ids.append(result2.boxes.cls.cpu().numpy().astype(int))
 
         xyxys = np.concatenate(xyxys, axis=0)
         confidences = np.concatenate(confidences, axis=0)
@@ -136,9 +141,10 @@ class ObjectDetection:
             start_time = time()
 
             ret, frame = cap.read()
-            assert ret
-            results = self.predict(frame)
-            frame = self.plot_bboxes(results, frame)
+            if not ret:
+                break
+            results, results2 = self.predict(frame)
+            frame = self.plot_bboxes(results, results2, frame)
             check = self.checkTrafficLight2(frame, results)
             if check is True:
                 print(1)
@@ -162,4 +168,3 @@ class ObjectDetection:
 
 detector = ObjectDetection('test.mp4')
 detector()
-
