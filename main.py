@@ -76,12 +76,12 @@ class ObjectDetection:
 
     def predict(self, frame):
 
-        results_car = self.model(frame, save=False, device=0, show=False, classes=[2], conf=0.4)
-        results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
+        results_car = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
+        # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
         results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.3)
-        return results_car, results_traffic, results2_crosswalk
+        return results_car, results2_crosswalk
 
-    def plot_bboxes(self, results, results2, results3, frame):
+    def plot_bboxes(self, results, results2, frame):
 
         xyxys = []
         confidences = []
@@ -93,28 +93,27 @@ class ObjectDetection:
 
         # Extract detections for Traffic light class
         for result in results:
-            xyxys.append(result.boxes.xyxy.cpu().numpy())
-            confidences.append(result.boxes.conf.cpu().numpy())
-            class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
-            boxes["car"] = result.boxes.xyxy.cpu().numpy()
+            if result.boxes.cls.cpu() == "car":
+                xyxys.append(result.boxes.xyxy.cpu().numpy())
+                confidences.append(result.boxes.conf.cpu().numpy())
+                class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
+                boxes["car"] = result.boxes.xyxy.cpu().numpy()
+            else:
+                xyxys.append(result.boxes.xyxy.cpu().numpy())
+                confidences.append(result.boxes.conf.cpu().numpy())
+                class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
+                boxes["trafficlight"] = result.boxes.xyxy.cpu().numpy()
 
         for result2 in results2:
             xyxys.append(result2.boxes.xyxy.cpu().numpy())
             confidences.append(result2.boxes.conf.cpu().numpy())
             class_ids.append(result2.boxes.cls.cpu().numpy().astype(int))
-            boxes["trafficlight"] = result2.boxes.xyxy.cpu().numpy()
-
-        for result3 in results3:
-            xyxys.append(result3.boxes.xyxy.cpu().numpy())
-            confidences.append(result3.boxes.conf.cpu().numpy())
-            class_ids.append(result3.boxes.cls.cpu().numpy().astype(int))
-            boxes["cross"] = result3.boxes.xyxy.cpu().numpy()
+            boxes["cross"] = result2.boxes.xyxy.cpu().numpy()
 
         if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
             print(self.is_under(boxes["car"][0], boxes["cross"][0], 20))
         else:
             self.color = self.GREEN
-
 
         xyxys = np.concatenate(xyxys, axis=0)
         confidences = np.concatenate(confidences, axis=0)
@@ -169,8 +168,8 @@ class ObjectDetection:
             ret, frame = cap.read()
             if not ret:
                 break
-            results, results2, results3 = self.predict(frame)
-            frame = self.plot_bboxes(results, results2, results3, frame)
+            results, results3 = self.predict(frame)
+            frame = self.plot_bboxes(results, results3, frame)
             end_time = time()
             fps = 1 / np.round(end_time - start_time, 2)
 
@@ -178,9 +177,6 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
             cv2.imshow('CrossVision', frame)
-
-
-
 
             if cv2.waitKey(5) & 0xFF == 27:
                 break
@@ -190,5 +186,5 @@ class ObjectDetection:
         cv2.destroyAllWindows()
 
 
-detector = ObjectDetection('vid2.mp4')
+detector = ObjectDetection('vid1.mp4')
 detector()
