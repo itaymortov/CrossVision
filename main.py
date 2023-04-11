@@ -10,40 +10,6 @@ from ultralytics.yolo.utils.metrics import bbox_iou
 
 class ObjectDetection:
 
-    def checkTrafficLight(self, frame, results):
-        frame_height, frame_width = frame.shape[:2]
-        polygon = np.array([
-            [0, 0],
-            [frame_width, 0],
-            [frame_width, int(frame_height * 0.4)],
-            [0, int(frame_height * 0.4)]
-        ])
-        xyxys = []
-        confidences = []
-        class_ids = []
-
-        zone = sv.PolygonZone(polygon=polygon, frame_resolution_wh=(frame.shape[0], frame.shape[1]))
-        for result in results:
-            xyxys.append(result.boxes.xyxy.cpu().numpy())
-            confidences.append(result.boxes.conf.cpu().numpy())
-            class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
-
-        xyxys = np.concatenate(xyxys, axis=0)
-        confidences = np.concatenate(confidences, axis=0)
-        class_ids = np.concatenate(class_ids, axis=0)
-
-        # Setup detections for visualization
-        detections = sv.Detections(
-            xyxy=xyxys,
-            confidence=confidences,
-            class_id=class_ids,
-        )
-        detections = detections[detections.class_id == 9]
-        zone.trigger(detections=detections)
-        if zone.current_count > 0:
-            return True
-        return False
-
     def __init__(self, capture_index):
 
         self.capture_index = capture_index
@@ -75,7 +41,7 @@ class ObjectDetection:
 
         results_car_traffic = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
         # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
-        results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.3)
+        results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.2)
         return results_car_traffic, results2_crosswalk
 
     def plot_bboxes(self, results, results2, frame):
@@ -98,12 +64,12 @@ class ObjectDetection:
                     xyxys.append(xy)
                     confidences.append(conf)
                     class_ids.append(id)
-                    boxes["car"].append(xy)
+                    boxes["car"].append(xy.tolist()[0])
                 if res.boxes.cls.cpu().numpy().astype(int) == 9:
                     xyxys.append(xy)
                     confidences.append(conf)
                     class_ids.append(id)
-                    boxes["trafficlight"].append(xy)
+                    boxes["trafficlight"].append(xy.tolist()[0])
 
         for result2 in results2:
             for res2 in result2:
@@ -113,24 +79,10 @@ class ObjectDetection:
                 xyxys.append(xy)
                 confidences.append(conf)
                 class_ids.append(id)
-                boxes["cross"].append(xy)
+                boxes["cross"].append(xy.tolist()[0])
 
-        # if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
-        for boxcross in boxes["cross"]:
-            for boxcar in boxes["car"]:
-                for boxtl in boxes["trafficlight"]:
-                    if boxcross and boxcar and not boxtl:
-                        print(self.is_under(boxcar, boxcross, 20))
-                    else:
-                        self.color = self.GREEN
-        # if any(boxes["cross"]) and any(boxes["car"]) and not any(boxes["trafficlight"]):
-        #     print(self.is_under(boxes["car"][0], boxes["cross"][0], 20))
-        # else:
-        #     self.color = self.GREEN
 
-        # boxes["cross"] = np.array([])
-        # boxes["car"] = np.array([])
-        # boxes["trafficlight"] = np.array([])
+
         xyxys = np.concatenate(xyxys, axis=0)
         confidences = np.concatenate(confidences, axis=0)
         class_ids = np.concatenate(class_ids, axis=0)
@@ -141,6 +93,14 @@ class ObjectDetection:
             confidence=confidences,
             class_id=class_ids,
         )
+
+        # if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
+        for boxcross in boxes["cross"]:
+            for boxcar in boxes["car"]:
+                if not self.checkTrafficLight(frame,detections):
+                    print(self.is_under(boxcar, boxcross, 20))
+                else:
+                    self.color = self.GREEN
 
         # Format custom labels
         self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
@@ -165,6 +125,22 @@ class ObjectDetection:
         else:
             self.color = self.RED
             return True
+
+    def checkTrafficLight(self, frame, detections):
+        frame_height, frame_width = frame.shape[:2]
+        polygon = np.array([
+            [0, 0],
+            [frame_width, 0],
+            [frame_width, int(frame_height * 0.4)],
+            [0, int(frame_height * 0.4)]
+        ])
+        zone = sv.PolygonZone(polygon=polygon, frame_resolution_wh=(frame.shape[0], frame.shape[1]))
+
+        detections = detections[detections.class_id == 9]
+        zone.trigger(detections=detections)
+        if zone.current_count > 0:
+            return True
+        return False
 
     def __call__(self):
 
@@ -193,13 +169,13 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
             cv2.imshow('CrossVision', frame)
-            cv2.waitKey(100)
+            # cv2.waitKey(100)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-
+        cv2.waitKey(1000000)
         cap.release()
         cv2.destroyAllWindows()
 
 
-detector = ObjectDetection('hidden.mp4')
+detector = ObjectDetection('test3.mp4')
 detector()
