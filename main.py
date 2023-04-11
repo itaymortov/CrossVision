@@ -54,10 +54,7 @@ class ObjectDetection:
         self.model, self.model2 = self.load_models()
 
         # self.CLASS_NAMES_DICT = self.model.model.names
-        self.CLASS_NAMES_DICT = {}
-        self.CLASS_NAMES_DICT[1] = 'crosswalk'
-        self.CLASS_NAMES_DICT[2] = 'car'
-        self.CLASS_NAMES_DICT[9] = 'traffic light'
+        self.CLASS_NAMES_DICT = {1: 'crosswalk', 2: 'car', 9: 'traffic light'}
 
         self.box_annotator = sv.BoxAnnotator(sv.ColorPalette.default(), thickness=1, text_thickness=1, text_scale=0.4)
 
@@ -67,7 +64,7 @@ class ObjectDetection:
 
     def load_models(self):
 
-        model = YOLO("yolov8s.pt")  # load a pretrained YOLOv8s model
+        model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
         model2 = YOLO("best.pt")  # load our self trained model.
         model.fuse()
         model2.fuse()
@@ -76,10 +73,10 @@ class ObjectDetection:
 
     def predict(self, frame):
 
-        results_car = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
+        results_car_traffic = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
         # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
         results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.3)
-        return results_car, results2_crosswalk
+        return results_car_traffic, results2_crosswalk
 
     def plot_bboxes(self, results, results2, frame):
 
@@ -178,10 +175,9 @@ class ObjectDetection:
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
             cv2.imshow('CrossVision', frame)
 
-            if cv2.waitKey(5) & 0xFF == 27:
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        # cv2.waitKey(100000)
         cap.release()
         cv2.destroyAllWindows()
 
