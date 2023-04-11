@@ -84,34 +84,53 @@ class ObjectDetection:
         confidences = []
         class_ids = []
         boxes = {}
-        boxes["cross"] = np.array([])
-        boxes["car"] = np.array([])
-        boxes["trafficlight"] = np.array([])
+        boxes["cross"] = []
+        boxes["car"] = []
+        boxes["trafficlight"] = []
 
-        # Extract detections for Traffic light class
         for result in results:
-            if result.boxes.cls.cpu() == "car":
-                xyxys.append(result.boxes.xyxy.cpu().numpy())
-                confidences.append(result.boxes.conf.cpu().numpy())
-                class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
-                boxes["car"] = result.boxes.xyxy.cpu().numpy()
-            else:
-                xyxys.append(result.boxes.xyxy.cpu().numpy())
-                confidences.append(result.boxes.conf.cpu().numpy())
-                class_ids.append(result.boxes.cls.cpu().numpy().astype(int))
-                boxes["trafficlight"] = result.boxes.xyxy.cpu().numpy()
+            for res in result:
+
+                xy = res.boxes.xyxy.cpu().numpy()
+                conf = res.boxes.conf.cpu().numpy()
+                id = res.boxes.cls.cpu().numpy().astype(int)
+                if res.boxes.cls.cpu().numpy().astype(int) == 2:
+                    xyxys.append(xy)
+                    confidences.append(conf)
+                    class_ids.append(id)
+                    boxes["car"].append(xy)
+                if res.boxes.cls.cpu().numpy().astype(int) == 9:
+                    xyxys.append(xy)
+                    confidences.append(conf)
+                    class_ids.append(id)
+                    boxes["trafficlight"].append(xy)
 
         for result2 in results2:
-            xyxys.append(result2.boxes.xyxy.cpu().numpy())
-            confidences.append(result2.boxes.conf.cpu().numpy())
-            class_ids.append(result2.boxes.cls.cpu().numpy().astype(int))
-            boxes["cross"] = result2.boxes.xyxy.cpu().numpy()
+            for res2 in result2:
+                xy = res2.boxes.xyxy.cpu().numpy()
+                conf = res2.boxes.conf.cpu().numpy()
+                id = res2.boxes.cls.cpu().numpy().astype(int)
+                xyxys.append(xy)
+                confidences.append(conf)
+                class_ids.append(id)
+                boxes["cross"].append(xy)
 
-        if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
-            print(self.is_under(boxes["car"][0], boxes["cross"][0], 20))
-        else:
-            self.color = self.GREEN
+        # if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
+        for boxcross in boxes["cross"]:
+            for boxcar in boxes["car"]:
+                for boxtl in boxes["trafficlight"]:
+                    if boxcross and boxcar and not boxtl:
+                        print(self.is_under(boxcar, boxcross, 20))
+                    else:
+                        self.color = self.GREEN
+        # if any(boxes["cross"]) and any(boxes["car"]) and not any(boxes["trafficlight"]):
+        #     print(self.is_under(boxes["car"][0], boxes["cross"][0], 20))
+        # else:
+        #     self.color = self.GREEN
 
+        # boxes["cross"] = np.array([])
+        # boxes["car"] = np.array([])
+        # boxes["trafficlight"] = np.array([])
         xyxys = np.concatenate(xyxys, axis=0)
         confidences = np.concatenate(confidences, axis=0)
         class_ids = np.concatenate(class_ids, axis=0)
@@ -174,7 +193,7 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
             cv2.imshow('CrossVision', frame)
-
+            cv2.waitKey(100)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
@@ -182,5 +201,5 @@ class ObjectDetection:
         cv2.destroyAllWindows()
 
 
-detector = ObjectDetection('vid1.mp4')
+detector = ObjectDetection('hidden.mp4')
 detector()
