@@ -41,7 +41,7 @@ class ObjectDetection:
 
         results_car_traffic = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
         # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
-        results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.2)
+        results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.3)
         return results_car_traffic, results2_crosswalk
 
     def plot_bboxes(self, results, results2, frame):
@@ -121,10 +121,8 @@ class ObjectDetection:
         # Check if the vertical overlap is positive and the vertical distance is within the deviation threshold
         if y_overlap > 0 and y_distance <= deviation:
             self.color = self.GREEN
-            return False
         else:
             self.color = self.RED
-            return True
 
     def checkTrafficLight(self, frame, detections):
         frame_height, frame_width = frame.shape[:2]
