@@ -4,6 +4,7 @@ import cv2
 from time import time
 from ultralytics import YOLO
 import supervision as sv
+from roboflow import Roboflow
 
 from ultralytics.yolo.utils.metrics import bbox_iou
 
@@ -29,11 +30,12 @@ class ObjectDetection:
         self.color = self.GREEN
 
     def load_models(self):
-
+        rf = Roboflow(api_key="0TnP654ifN8El8Ca4ZGs")
+        project = rf.workspace().project("crosswalk-detection-3zwzx")
+        model2 = project.version(1).model
         model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
-        model2 = YOLO("best.pt")  # load our self trained model.
+
         model.fuse()
-        model2.fuse()
 
         return model, model2
 
@@ -41,7 +43,9 @@ class ObjectDetection:
 
         results_car_traffic = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
         # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
-        results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[1], conf=0.3)
+        #results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[0], conf=0.3)
+        results2_crosswalk = self.model2.predict(frame, confidence=40, overlap=30).json()
+
         return results_car_traffic, results2_crosswalk
 
     def plot_bboxes(self, results, results2, frame):
@@ -49,10 +53,7 @@ class ObjectDetection:
         xyxys = []
         confidences = []
         class_ids = []
-        boxes = {}
-        boxes["cross"] = []
-        boxes["car"] = []
-        boxes["trafficlight"] = []
+        boxes = {"cross": [], "car": [], "trafficlight": []}
 
         for result in results:
             for res in result:
@@ -71,7 +72,8 @@ class ObjectDetection:
                     class_ids.append(id)
                     boxes["trafficlight"].append(xy.tolist()[0])
 
-        for result2 in results2:
+        for result2 in results2["predictions"]:
+            """
             for res2 in result2:
                 xy = res2.boxes.xyxy.cpu().numpy()
                 conf = res2.boxes.conf.cpu().numpy()
@@ -80,28 +82,37 @@ class ObjectDetection:
                 confidences.append(conf)
                 class_ids.append(id)
                 boxes["cross"].append(xy.tolist()[0])
+                """
+            if result2["class"] == 'crosswalk':
+                xy = np.array([result2["x"] - result2["width"]/2, result2["y"] - result2["height"]/2, result2["x"] + result2["width"]/2,  result2["y"] + result2["height"]/2])
+                xy = xy.reshape(1, 4)
+                xyxys.append(xy)
+                confidences.append(np.array([result2["confidence"]]))
+                class_ids.append(np.array([1]))
+                boxes["cross"].append(xy.tolist()[0])
 
-
-        if xyxys and confidences and class_ids:
+        if xyxys:
             xyxys = np.concatenate(xyxys, axis=0)
+        if confidences:
             confidences = np.concatenate(confidences, axis=0)
+        if class_ids:
             class_ids = np.concatenate(class_ids, axis=0)
-            # Setup detections for visualization
-            detections = sv.Detections(
-                xyxy=xyxys,
-                confidence=confidences,
-                class_id=class_ids,
-            )
-            if not boxes["cross"] or not boxes["car"]:
-                self.color = self.GREEN
-            for boxcross in boxes["cross"]:
-                for boxcar in boxes["car"]:
-                    if not self.checkTrafficLight(frame, detections) and self.is_under(boxcar, boxcross, 35, frame):
-                        print("RED")
-                        self.color = self.RED
-                    else:
-                        print("GREEN")
-                        self.color = self.GREEN
+        # Setup detections for visualization
+        detections = sv.Detections(
+            xyxy=xyxys,
+            confidence=confidences,
+            class_id=class_ids,
+        )
+        if not boxes["cross"] or not boxes["car"]:
+            self.color = self.GREEN
+        for boxcross in boxes["cross"]:
+            for boxcar in boxes["car"]:
+                if not self.checkTrafficLight(frame, detections) and self.is_under(boxcar, boxcross, 35, frame):
+                    print("RED")
+                    self.color = self.RED
+                else:
+                    print("GREEN")
+                    self.color = self.GREEN
 
             # Format custom labels
             self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
@@ -109,8 +120,6 @@ class ObjectDetection:
                            in detections]
             # Annotate and display frame
             frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
-
-
 
         return frame
 
@@ -141,14 +150,14 @@ class ObjectDetection:
             crosspointcenter = (int((int(xyxy2[0]) + int(xyxy2[2])) / 2), int((int(xyxy2[1]) + int(xyxy2[3])) / 2))
             cv2.line(frame, carpointcenter, crosspointcenter, (0, 255, 0), 1)
             cv2.putText(frame, f"distance: {y_distance}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            cv2.putText(frame, f"overlap: {y_overlap}", tuple(sum(x) for x in zip(carpointcenter, (0, 30))), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.putText(frame, f"overlap: {y_overlap}", tuple(sum(x) for x in zip(carpointcenter, (0, 30))),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             # cv2.putText(frame, f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}", tuple(sum(x) for x in zip(carpointcenter, (0, 60))),
             #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
             return False
         else:
             return True
-
 
     def checkTrafficLight(self, frame, detections):
         frame_height, frame_width = frame.shape[:2]
@@ -196,11 +205,12 @@ class ObjectDetection:
             # cv2.waitKey(500)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        cv2.waitKey(1000000)
+
         cap.release()
         cv2.destroyAllWindows()
 
-detector = ObjectDetection('img3.jpg')
+
+detector = ObjectDetection('hidden.mp4')
 # detector = ObjectDetection('testimg/i1.jpg')
 # detector = ObjectDetection('testvid/v1.mp4')
 detector()
