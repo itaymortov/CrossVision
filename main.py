@@ -82,47 +82,73 @@ class ObjectDetection:
                 boxes["cross"].append(xy.tolist()[0])
 
 
+        if xyxys and confidences and class_ids:
+            xyxys = np.concatenate(xyxys, axis=0)
+            confidences = np.concatenate(confidences, axis=0)
+            class_ids = np.concatenate(class_ids, axis=0)
+            # Setup detections for visualization
+            detections = sv.Detections(
+                xyxy=xyxys,
+                confidence=confidences,
+                class_id=class_ids,
+            )
+            if not boxes["cross"] or not boxes["car"]:
+                self.color = self.GREEN
+            for boxcross in boxes["cross"]:
+                for boxcar in boxes["car"]:
+                    if not self.checkTrafficLight(frame, detections) and self.is_under(boxcar, boxcross, 35, frame):
+                        print("RED")
+                        self.color = self.RED
+                    else:
+                        print("GREEN")
+                        self.color = self.GREEN
 
-        xyxys = np.concatenate(xyxys, axis=0)
-        confidences = np.concatenate(confidences, axis=0)
-        class_ids = np.concatenate(class_ids, axis=0)
-        # Setup detections for visualization
+            # Format custom labels
+            self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
+                           for _, confidence, class_id, tracker_id
+                           in detections]
+            # Annotate and display frame
+            frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
 
-        detections = sv.Detections(
-            xyxy=xyxys,
-            confidence=confidences,
-            class_id=class_ids,
-        )
 
-        # if np.any(boxes["cross"]) and np.any(boxes["car"]) and not np.any(boxes["trafficlight"]):
-        for boxcross in boxes["cross"]:
-            for boxcar in boxes["car"]:
-                if not self.checkTrafficLight(frame,detections):
-                    print(self.is_under(boxcar, boxcross, 20))
-                else:
-                    self.color = self.GREEN
 
-        # Format custom labels
-        self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
-                       for _, confidence, class_id, tracker_id
-                       in detections]
-
-        # Annotate and display frame
-        frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
         return frame
 
-    def is_under(self, xyxy1, xyxy2, deviation):
+    def is_under(self, xyxy1, xyxy2, deviation, frame):
         # Calculate the vertical overlap between the two bounding boxes
         y_overlap = min(xyxy1[3], xyxy2[3]) - max(xyxy1[1], xyxy2[1])
+
+        x_overlap = min(xyxy1[2], xyxy2[2]) - max(xyxy1[0], xyxy2[0])
 
         # Calculate the vertical distance between the centers of the two bounding boxes
         y_distance = abs((xyxy1[1] + xyxy1[3]) / 2 - (xyxy2[1] + xyxy2[3]) / 2)
 
         # Check if the vertical overlap is positive and the vertical distance is within the deviation threshold
-        if y_overlap > 0 and y_distance <= deviation:
-            self.color = self.GREEN
+        print(f"distance: {y_distance}")
+        print(f"y_overlap: {y_overlap}")
+        print(f"x_overlap: {x_overlap}")
+        print(f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}")
+        if x_overlap + deviation > 0 and y_overlap + deviation > 0 and xyxy1[3] > xyxy2[1]:
+            print("RED", "y_distance: ", y_distance)
+            carpointcenter = (int((int(xyxy1[0]) + int(xyxy1[2])) / 2), int((int(xyxy1[1]) + int(xyxy1[3])) / 2))
+            crosspointcenter = (int((int(xyxy2[0]) + int(xyxy2[2])) / 2), int((int(xyxy2[1]) + int(xyxy2[3])) / 2))
+            cv2.line(frame, carpointcenter, crosspointcenter, (255, 0, 0), 1)
+            cv2.putText(frame, f"distance: {y_distance}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            cv2.putText(frame, f"overlap: {y_overlap}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            return True
+        elif xyxy1[3] > xyxy2[1]:
+            carpointcenter = (int((int(xyxy1[0]) + int(xyxy1[2])) / 2), int((int(xyxy1[1]) + int(xyxy1[3])) / 2))
+            crosspointcenter = (int((int(xyxy2[0]) + int(xyxy2[2])) / 2), int((int(xyxy2[1]) + int(xyxy2[3])) / 2))
+            cv2.line(frame, carpointcenter, crosspointcenter, (0, 255, 0), 1)
+            cv2.putText(frame, f"distance: {y_distance}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.putText(frame, f"overlap: {y_overlap}", tuple(sum(x) for x in zip(carpointcenter, (0, 30))), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            # cv2.putText(frame, f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}", tuple(sum(x) for x in zip(carpointcenter, (0, 60))),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+            return False
         else:
-            self.color = self.RED
+            return True
+
 
     def checkTrafficLight(self, frame, detections):
         frame_height, frame_width = frame.shape[:2]
@@ -167,13 +193,14 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
             cv2.imshow('CrossVision', frame)
-            # cv2.waitKey(100)
+            # cv2.waitKey(500)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         cv2.waitKey(1000000)
         cap.release()
         cv2.destroyAllWindows()
 
-
-detector = ObjectDetection('test3.mp4')
+detector = ObjectDetection('img3.jpg')
+# detector = ObjectDetection('testimg/i1.jpg')
+# detector = ObjectDetection('testvid/v1.mp4')
 detector()
