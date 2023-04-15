@@ -47,8 +47,6 @@ class ObjectDetection:
     def plot_bboxes(self, results, results2, frame):
 
         xyxys = []
-        confidences = []
-        class_ids = []
         boxes = {}
         boxes["cross"] = []
         boxes["car"] = []
@@ -57,46 +55,27 @@ class ObjectDetection:
         for result in results:
             for res in result:
 
-                xy = res.boxes.xyxy.cpu().numpy()
-                conf = res.boxes.conf.cpu().numpy()
-                id = res.boxes.cls.cpu().numpy().astype(int)
+                xy = res.boxes.xyxy
                 if res.boxes.cls.cpu().numpy().astype(int) == 2:
                     xyxys.append(xy)
-                    confidences.append(conf)
-                    class_ids.append(id)
                     boxes["car"].append(xy.tolist()[0])
                 if res.boxes.cls.cpu().numpy().astype(int) == 9:
                     xyxys.append(xy)
-                    confidences.append(conf)
-                    class_ids.append(id)
                     boxes["trafficlight"].append(xy.tolist()[0])
 
         for result2 in results2:
             for res2 in result2:
-                xy = res2.boxes.xyxy.cpu().numpy()
-                conf = res2.boxes.conf.cpu().numpy()
-                id = res2.boxes.cls.cpu().numpy().astype(int)
+                xy = res2.boxes.xyxy
                 xyxys.append(xy)
-                confidences.append(conf)
-                class_ids.append(id)
                 boxes["cross"].append(xy.tolist()[0])
 
 
-        if xyxys and confidences and class_ids:
-            xyxys = np.concatenate(xyxys, axis=0)
-            confidences = np.concatenate(confidences, axis=0)
-            class_ids = np.concatenate(class_ids, axis=0)
-            # Setup detections for visualization
-            detections = sv.Detections(
-                xyxy=xyxys,
-                confidence=confidences,
-                class_id=class_ids,
-            )
+
             if not boxes["cross"] or not boxes["car"]:
                 self.color = self.GREEN
             for boxcross in boxes["cross"]:
                 for boxcar in boxes["car"]:
-                    if not self.checkTrafficLight(frame, detections) and self.is_under(boxcar, boxcross, 35, frame):
+                    if self.is_under(boxcar, boxcross, 35, frame):
                         print("RED")
                         self.color = self.RED
                     else:
@@ -104,11 +83,11 @@ class ObjectDetection:
                         self.color = self.GREEN
 
             # Format custom labels
-            self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
-                           for _, confidence, class_id, tracker_id
-                           in detections]
+            # self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
+            #                for _, confidence, class_id, tracker_id
+            #                in detections]
             # Annotate and display frame
-            frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
+            # frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
 
 
 
@@ -192,8 +171,11 @@ class ObjectDetection:
             cv2.putText(frame, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
+
+            frame = results[0].plot()
+            # frame = results3[0].plot()
             cv2.imshow('CrossVision', frame)
-            cv2.waitKey(200)
+            cv2.waitKey(100)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         cv2.waitKey(1000000)
