@@ -172,7 +172,7 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
 
-            frame = results[0].plot()
+            # frame = results[0].plot()
             # frame = results3[0].plot()
             cv2.imshow('CrossVision', frame)
             cv2.waitKey(100)
