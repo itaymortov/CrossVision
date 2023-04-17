@@ -11,6 +11,12 @@ from ultralytics.yolo.utils.metrics import bbox_iou
 class ObjectDetection:
 
     def __init__(self, capture_index):
+        """
+         Initializes the ObjectDetection class with the capture index,
+         sets the device to either CPU or GPU depending on availability,
+         loads YOLOv8n and a self-trained YOLOv8 model, defines a dictionary for class names, creates a box annotator, sets colors for visualizations.
+        :param capture_index: Source to analyse (either a camera, video feed or a picture.
+        """
 
         self.capture_index = capture_index
 
@@ -29,7 +35,9 @@ class ObjectDetection:
         self.color = self.GREEN
 
     def load_models(self):
-
+        """
+        Loads the YOLOv8n and self-trained YOLOv8 models.
+        """
         model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
         model2 = YOLO("best2.pt")  # load our self trained model.
         # model.fuse()
@@ -38,19 +46,27 @@ class ObjectDetection:
         return model, model2
 
     def predict(self, frame):
-
+        """
+        Runs inference on the two loaded models to detect cars, traffic lights, and crosswalks in the input frame, and returns the results.
+        :param frame: Current frame.
+        :return: Results from the models.
+        """
         results_car_traffic = self.model(frame, save=False, device=0, show=False, classes=[2, 9], conf=0.4)
-        # results_traffic = self.model(frame, save=False, device=0, show=False, classes=[9], conf=0.4)
         results2_crosswalk = self.model2(frame, save=False, device=0, show=False, classes=[0], conf=0.3)
         return results_car_traffic, results2_crosswalk
 
     def plot_bboxes(self, results, results2, frame):
-
+        """
+        Processes the model predictions to extract bounding boxes around cars, traffic lights, and crosswalks,
+        calculates the vertical overlap between car and crosswalk bounding boxes,
+        This method also sets a color (green or red) based on whether the car is under the crosswalk, and returns the annotated frame.
+        :param results: Car and traffic light prediction results
+        :param results2: Crosswalk prediction results
+        :param frame: Current frame
+        :return: the current frame after plotting the Bounding box on it
+        """
         xyxys = []
-        boxes = {}
-        boxes["cross"] = []
-        boxes["car"] = []
-        boxes["trafficlight"] = []
+        boxes = {"cross": [], "car": [], "trafficlight": []}
 
         for result in results:
             for res in result:
@@ -69,8 +85,6 @@ class ObjectDetection:
                 xyxys.append(xy)
                 boxes["cross"].append(xy.tolist()[0])
 
-
-
             if not boxes["cross"] or not boxes["car"]:
                 self.color = self.GREEN
             for boxcross in boxes["cross"]:
@@ -82,18 +96,20 @@ class ObjectDetection:
                         print("GREEN")
                         self.color = self.GREEN
 
-            # Format custom labels
-            # self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
-            #                for _, confidence, class_id, tracker_id
-            #                in detections]
-            # Annotate and display frame
-            # frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
-
-
-
         return frame
 
+
     def is_under(self, xyxy1, xyxy2, deviation, frame):
+        """
+        Calculates the vertical overlap and distance between two bounding boxes,
+        checks if the vertical overlap is positive and within a given deviation threshold,
+        and returns True or False depending on whether the obstacle is under the crosswalk.
+        :param xyxy1: first BBox to check if under (The obstacle)
+        :param xyxy2: Second Bbox to check if under (The crossWalk)
+        :param deviation: the deviation we set for the overlap
+        :param frame: the current frame
+        :return: Bool type.
+        """
         # Calculate the vertical overlap between the two bounding boxes
         y_overlap = min(xyxy1[3], xyxy2[3]) - max(xyxy1[1], xyxy2[1])
 
@@ -108,26 +124,11 @@ class ObjectDetection:
         print(f"x_overlap: {x_overlap}")
         print(f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}")
         if x_overlap + deviation > 0 and y_overlap + deviation > 0 and xyxy1[3] > xyxy2[1]:
-            print("RED", "y_distance: ", y_distance)
-            carpointcenter = (int((int(xyxy1[0]) + int(xyxy1[2])) / 2), int((int(xyxy1[1]) + int(xyxy1[3])) / 2))
-            crosspointcenter = (int((int(xyxy2[0]) + int(xyxy2[2])) / 2), int((int(xyxy2[1]) + int(xyxy2[3])) / 2))
-            cv2.line(frame, carpointcenter, crosspointcenter, (255, 0, 0), 1)
-            cv2.putText(frame, f"distance: {y_distance}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-            cv2.putText(frame, f"overlap: {y_overlap}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
             return True
         elif xyxy1[3] > xyxy2[1]:
-            carpointcenter = (int((int(xyxy1[0]) + int(xyxy1[2])) / 2), int((int(xyxy1[1]) + int(xyxy1[3])) / 2))
-            crosspointcenter = (int((int(xyxy2[0]) + int(xyxy2[2])) / 2), int((int(xyxy2[1]) + int(xyxy2[3])) / 2))
-            cv2.line(frame, carpointcenter, crosspointcenter, (0, 255, 0), 1)
-            cv2.putText(frame, f"distance: {y_distance}", carpointcenter, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            cv2.putText(frame, f"overlap: {y_overlap}", tuple(sum(x) for x in zip(carpointcenter, (0, 30))), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            # cv2.putText(frame, f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}", tuple(sum(x) for x in zip(carpointcenter, (0, 60))),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
             return False
         else:
             return True
-
 
     def checkTrafficLight(self, frame, detections):
         frame_height, frame_width = frame.shape[:2]
@@ -163,8 +164,8 @@ class ObjectDetection:
             ret, frame = cap.read()
             if not ret:
                 break
-            results, results3 = self.predict(frame)
-            frame = self.plot_bboxes(results, results3, frame)
+            results, results2 = self.predict(frame)
+            frame = self.plot_bboxes(results, results2, frame)
             end_time = time()
             fps = 1 / np.round(end_time - start_time, 2)
 
@@ -172,8 +173,6 @@ class ObjectDetection:
 
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
 
-            # frame = results[0].plot()
-            # frame = results3[0].plot()
             cv2.imshow('CrossVision', frame)
             cv2.waitKey(100)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -182,7 +181,5 @@ class ObjectDetection:
         cap.release()
         cv2.destroyAllWindows()
 
-detector = ObjectDetection('hidden.mp4')
-# detector = ObjectDetection('testimg/i1.jpg')
-# detector = ObjectDetection('testvid/v1.mp4')
+detector = ObjectDetection('testvid/v1.mp4')
 detector()
