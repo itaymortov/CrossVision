@@ -117,7 +117,7 @@ class CrossVisionDetection:
             # Annotate and display frame
             frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
 
-            if not self.checkTrafficLight(frame,detections):
+            if not self.checkTrafficLight(frame, detections):
                 if not boxes["cross"] or not boxes["car"]:
                     self.color = self.GREEN
                 for boxcross in boxes["cross"]:
@@ -125,12 +125,12 @@ class CrossVisionDetection:
                         if self.is_under(boxcar, boxcross, 35, frame):
                             print("RED")
                             self.color = self.RED
+                            break
                         else:
                             print("GREEN")
                             self.color = self.GREEN
 
         return frame
-
 
     def is_under(self, xyxy1, xyxy2, deviation, frame):
         """
@@ -144,24 +144,25 @@ class CrossVisionDetection:
         :return: Bool type.
         """
         # Calculate the vertical overlap between the two bounding boxes
-        y_overlap = min(xyxy1[3], xyxy2[3]) - max(xyxy1[1], xyxy2[1])
+        if xyxy1[3] < xyxy2[3]:
+            y_overlap = xyxy1[3] - xyxy2[1]
+        else:
+            y_overlap = xyxy2[3] - xyxy1[1]
 
-        x_overlap = min(xyxy1[2], xyxy2[2]) - max(xyxy1[0], xyxy2[0])
+        if xyxy1[2] < xyxy2[2]:
+            x_overlap = xyxy1[2] - xyxy2[0]
+        else:
+            x_overlap = xyxy2[2] - xyxy1[0]
 
-        # Calculate the vertical distance between the centers of the two bounding boxes
-        y_distance = abs((xyxy1[1] + xyxy1[3]) / 2 - (xyxy2[1] + xyxy2[3]) / 2)
-
-        # Check if the vertical overlap is positive and the vertical distance is within the deviation threshold
-        print(f"distance: {y_distance}")
         print(f"y_overlap: {y_overlap}")
         print(f"x_overlap: {x_overlap}")
         print(f"xyxy1[3] < xyxy2[1]: {xyxy1[3], xyxy2[1]}")
         if x_overlap + deviation > 0 and y_overlap + deviation > 0 and xyxy1[3] > xyxy2[1]:
             return True
         elif xyxy1[3] > xyxy2[1]:
-            return False
-        else:
             return True
+        else:
+            return False
 
     def checkTrafficLight(self, frame, detections):
         frame_height, frame_width = frame.shape[:2]
@@ -209,10 +210,13 @@ class CrossVisionDetection:
             cv2.imshow('CrossVision', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        if self.capture_index.endswith(".jpg"):
-            cv2.waitKey(1000000)
+            cv2.waitKey(5)
+        if self.capture_index != 0:
+            if self.capture_index.endswith(".jpg"):
+                cv2.waitKey(1000000)
         cap.release()
         cv2.destroyAllWindows()
 
-detector = CrossVisionDetection('testimg/img2.jpg')
+
+detector = CrossVisionDetection('testvid/vid2.mp4')
 detector()
