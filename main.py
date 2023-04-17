@@ -8,7 +8,7 @@ import supervision as sv
 from ultralytics.yolo.utils.metrics import bbox_iou
 
 
-class ObjectDetection:
+class CrossVisionDetection:
 
     def __init__(self, capture_index):
         """
@@ -39,7 +39,7 @@ class ObjectDetection:
         Loads the YOLOv8n and self-trained YOLOv8 models.
         """
         model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
-        model2 = YOLO("best2.pt")  # load our self trained model.
+        model2 = YOLO("CrosswalkModel.pt")  # load our self trained model.
         # model.fuse()
         # model2.fuse()
 
@@ -66,35 +66,68 @@ class ObjectDetection:
         :return: the current frame after plotting the Bounding box on it
         """
         xyxys = []
-        boxes = {"cross": [], "car": [], "trafficlight": []}
+        confidences = []
+        class_ids = []
+        boxes = {}
+        boxes["cross"] = []
+        boxes["car"] = []
+        boxes["trafficlight"] = []
 
         for result in results:
             for res in result:
 
-                xy = res.boxes.xyxy
+                xy = res.boxes.xyxy.cpu().numpy()
+                conf = res.boxes.conf.cpu().numpy()
+                id = res.boxes.cls.cpu().numpy().astype(int)
                 if res.boxes.cls.cpu().numpy().astype(int) == 2:
                     xyxys.append(xy)
+                    confidences.append(conf)
+                    class_ids.append(id)
                     boxes["car"].append(xy.tolist()[0])
                 if res.boxes.cls.cpu().numpy().astype(int) == 9:
                     xyxys.append(xy)
+                    confidences.append(conf)
+                    class_ids.append(id)
                     boxes["trafficlight"].append(xy.tolist()[0])
 
         for result2 in results2:
             for res2 in result2:
-                xy = res2.boxes.xyxy
+                xy = res2.boxes.xyxy.cpu().numpy()
+                conf = res2.boxes.conf.cpu().numpy()
+                id = res2.boxes.cls.cpu().numpy().astype(int)
                 xyxys.append(xy)
+                confidences.append(conf)
+                class_ids.append(id)
                 boxes["cross"].append(xy.tolist()[0])
 
-            if not boxes["cross"] or not boxes["car"]:
-                self.color = self.GREEN
-            for boxcross in boxes["cross"]:
-                for boxcar in boxes["car"]:
-                    if self.is_under(boxcar, boxcross, 35, frame):
-                        print("RED")
-                        self.color = self.RED
-                    else:
-                        print("GREEN")
-                        self.color = self.GREEN
+        if xyxys and confidences and class_ids:
+            xyxys = np.concatenate(xyxys, axis=0)
+            confidences = np.concatenate(confidences, axis=0)
+            class_ids = np.concatenate(class_ids, axis=0)
+            # Setup detections for visualization
+            detections = sv.Detections(
+                xyxy=xyxys,
+                confidence=confidences,
+                class_id=class_ids,
+            )
+            # Format custom labels
+            self.labels = [f"{self.CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
+                           for _, confidence, class_id, tracker_id
+                           in detections]
+            # Annotate and display frame
+            frame = self.box_annotator.annotate(scene=frame, detections=detections, labels=self.labels)
+
+            if not self.checkTrafficLight(frame,detections):
+                if not boxes["cross"] or not boxes["car"]:
+                    self.color = self.GREEN
+                for boxcross in boxes["cross"]:
+                    for boxcar in boxes["car"]:
+                        if self.is_under(boxcar, boxcross, 35, frame):
+                            print("RED")
+                            self.color = self.RED
+                        else:
+                            print("GREEN")
+                            self.color = self.GREEN
 
         return frame
 
@@ -174,12 +207,12 @@ class ObjectDetection:
             cv2.rectangle(frame, (0, 0), (int(width), int(height)), self.color, 10)
 
             cv2.imshow('CrossVision', frame)
-            cv2.waitKey(100)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        cv2.waitKey(1000000)
+        if self.capture_index.endswith(".jpg"):
+            cv2.waitKey(1000000)
         cap.release()
         cv2.destroyAllWindows()
 
-detector = ObjectDetection('testvid/v1.mp4')
+detector = CrossVisionDetection('testimg/img2.jpg')
 detector()
